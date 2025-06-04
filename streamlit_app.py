@@ -1,10 +1,8 @@
-pip install -r requirements.txt
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import seaborn as sns
 import datetime
 
 from sklearn.model_selection import train_test_split
@@ -89,9 +87,9 @@ tabs = st.tabs(["📈 Visualizations", "🧠 Model: No FE", "⚙️ Model: With 
 # 3.1 TAB 1: VISUALIZATIONS
 # ---------------------------------------
 with tabs[0]:
-    st.header("1. Interactive Exploratory Visualizations")
+    st.header("1. Exploratory Visualizations")
 
-    # 1.1 KPI Cards (Total Sales, Total Profit, Total Orders)
+    # 1.1 KPI Cards (Total Sales, Total Profit, Total Orders, Avg Discount)
     total_sales = filtered_df["Sales"].sum()
     total_profit = filtered_df["Profit"].sum()
     total_orders = filtered_df.shape[0]
@@ -105,7 +103,7 @@ with tabs[0]:
 
     st.markdown("---")
 
-    # 1.2 Date vs KPI Time-Series (Line Chart)
+    # 1.2 Time-Series: Sales & Profit Over Time
     st.subheader("Sales & Profit Over Time")
     temp = (
         filtered_df
@@ -115,36 +113,16 @@ with tabs[0]:
         .reset_index()
     )
 
-    fig_time = go.Figure()
-    fig_time.add_trace(
-        go.Scatter(
-            x=temp["YearMonth"],
-            y=temp["Sales"],
-            mode="lines+markers",
-            name="Sales",
-            line=dict(color="royalblue"),
-            marker=dict(size=6),
-            hovertemplate="Sales: %{y:$,.0f}<br>Date: %{x|%b %Y}<extra></extra>"
-        )
-    )
-    fig_time.add_trace(
-        go.Scatter(
-            x=temp["YearMonth"],
-            y=temp["Profit"],
-            mode="lines+markers",
-            name="Profit",
-            line=dict(color="seagreen"),
-            marker=dict(size=6),
-            hovertemplate="Profit: %{y:$,.0f}<br>Date: %{x|%b %Y}<extra></extra>"
-        )
-    )
-    fig_time.update_layout(
-        xaxis_title="Month",
-        yaxis_title="Amount (USD)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(t=40, b=30, l=40, r=40)
-    )
-    st.plotly_chart(fig_time, use_container_width=True)
+    fig_ts, ax_ts = plt.subplots(figsize=(10, 4))
+    ax_ts.plot(temp["YearMonth"], temp["Sales"], marker="o", linestyle="-", color="tab:blue", label="Sales")
+    ax_ts.plot(temp["YearMonth"], temp["Profit"], marker="o", linestyle="-", color="tab:green", label="Profit")
+    ax_ts.set_xlabel("Month")
+    ax_ts.set_ylabel("Amount (USD)")
+    ax_ts.set_title("Monthly Sales & Profit")
+    ax_ts.legend(loc="upper left")
+    ax_ts.grid(alpha=0.3)
+    fig_ts.autofmt_xdate()
+    st.pyplot(fig_ts)
 
     st.markdown("---")
 
@@ -154,24 +132,25 @@ with tabs[0]:
     chosen_num = st.selectbox("Select a Numeric Feature", options=num_cols, index=0)
     bin_count = st.slider("Number of Bins", min_value=20, max_value=100, value=40)
 
-    fig_hist = px.histogram(
-        filtered_df,
-        x=chosen_num,
-        nbins=bin_count,
-        marginal="box",  # adds a boxplot on top
-        opacity=0.75,
-        labels={chosen_num: chosen_num},
-        title=f"Distribution of {chosen_num}"
+    fig_hist, ax_hist = plt.subplots(figsize=(8, 4))
+    sns.histplot(
+        filtered_df[chosen_num],
+        bins=bin_count,
+        kde=True,
+        ax=ax_hist,
+        color="steelblue"
     )
-    fig_hist.update_layout(margin=dict(t=40, b=30, l=40, r=40))
-    st.plotly_chart(fig_hist, use_container_width=True)
+    ax_hist.set_title(f"Distribution of {chosen_num}")
+    ax_hist.set_xlabel(chosen_num)
+    ax_hist.set_ylabel("Count")
+    st.pyplot(fig_hist)
 
     st.markdown("---")
 
-    # 1.4 Category Breakdown (Bar Charts)
+    # 1.4 Category & Sub-Category Breakdown (Side-by-side)
     st.subheader("Category & Sub-Category Breakdown")
-
     colA, colB = st.columns(2)
+
     with colA:
         sales_by_cat = (
             filtered_df.groupby("Category")["Sales"]
@@ -179,18 +158,18 @@ with tabs[0]:
             .reset_index()
             .sort_values("Sales", ascending=False)
         )
-        fig_cat_sales = px.bar(
-            sales_by_cat,
-            x="Sales",
-            y="Category",
-            orientation="h",
-            color="Category",
-            labels={"Sales": "Total Sales (USD)"},
-            title="Total Sales by Category",
-            text_auto="$,.0f"
+        fig_cat_sales, ax_cat_sales = plt.subplots(figsize=(6, 4))
+        ax_cat_sales.barh(
+            sales_by_cat["Category"],
+            sales_by_cat["Sales"],
+            color=plt.cm.Paired.colors
         )
-        fig_cat_sales.update_layout(showlegend=False, margin=dict(t=40, b=30, l=40, r=40))
-        st.plotly_chart(fig_cat_sales, use_container_width=True)
+        ax_cat_sales.invert_yaxis()
+        ax_cat_sales.set_xlabel("Total Sales (USD)")
+        ax_cat_sales.set_title("Total Sales by Category")
+        for i, v in enumerate(sales_by_cat["Sales"]):
+            ax_cat_sales.text(v + total_sales * 0.005, i, f"${v:,.0f}", va="center")
+        st.pyplot(fig_cat_sales)
 
     with colB:
         profit_by_cat = (
@@ -199,86 +178,87 @@ with tabs[0]:
             .reset_index()
             .sort_values("Profit", ascending=False)
         )
-        fig_cat_profit = px.bar(
-            profit_by_cat,
-            x="Profit",
-            y="Category",
-            orientation="h",
-            color="Category",
-            labels={"Profit": "Total Profit (USD)"},
-            title="Total Profit by Category",
-            text_auto="$,.0f"
+        fig_cat_profit, ax_cat_profit = plt.subplots(figsize=(6, 4))
+        ax_cat_profit.barh(
+            profit_by_cat["Category"],
+            profit_by_cat["Profit"],
+            color=plt.cm.Paired.colors
         )
-        fig_cat_profit.update_layout(showlegend=False, margin=dict(t=40, b=30, l=40, r=40))
-        st.plotly_chart(fig_cat_profit, use_container_width=True)
+        ax_cat_profit.invert_yaxis()
+        ax_cat_profit.set_xlabel("Total Profit (USD)")
+        ax_cat_profit.set_title("Total Profit by Category")
+        for i, v in enumerate(profit_by_cat["Profit"]):
+            ax_cat_profit.text(v + total_profit * 0.005, i, f"${v:,.0f}", va="center")
+        st.pyplot(fig_cat_profit)
 
     st.markdown("---")
 
-    # 1.5 Scatter: Discount vs Profit
+    # 1.5 Scatter: Discount vs. Profit, colored by Category
     st.subheader("Discount vs. Profit (Colored by Category)")
-    fig_scatter = px.scatter(
-        filtered_df,
-        x="Discount",
-        y="Profit",
-        color="Category",
-        hover_data=["Sub-Category", "Sales"],
-        opacity=0.7,
-        labels={"Discount": "Discount Rate", "Profit": "Profit (USD)"},
-        title="How Discount Impacts Profit"
-    )
-    fig_scatter.update_layout(margin=dict(t=40, b=30, l=40, r=40))
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    fig_scatter, ax_scatter = plt.subplots(figsize=(8, 5))
+    categories = filtered_df["Category"].unique()
+    palette = sns.color_palette("Set2", len(categories))
+    for idx, cat in enumerate(categories):
+        subset = filtered_df[filtered_df["Category"] == cat]
+        ax_scatter.scatter(
+            subset["Discount"],
+            subset["Profit"],
+            label=cat,
+            alpha=0.6,
+            s=30,
+            color=palette[idx]
+        )
+    ax_scatter.set_xlabel("Discount")
+    ax_scatter.set_ylabel("Profit (USD)")
+    ax_scatter.set_title("How Discount Impacts Profit")
+    ax_scatter.legend(title="Category", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax_scatter.grid(alpha=0.3)
+    st.pyplot(fig_scatter)
 
     st.markdown("---")
 
-    # 1.6 Correlation Heatmap (Static Image)
+    # 1.6 Correlation Heatmap
     st.subheader("Correlation Matrix of Key Numerics")
     corr_df = filtered_df[["Sales", "Profit", "Quantity", "Discount", "Shipping Cost"]].corr().round(2)
-    fig_corr = go.Figure(
-        data=go.Heatmap(
-            z=corr_df.values,
-            x=corr_df.columns,
-            y=corr_df.columns,
-            colorscale="RdBu",
-            zmid=0,
-            text=np.array(corr_df.values, dtype=str),
-            texttemplate="%{text}",
-            hovertemplate="Feature 1: %{y}<br>Feature 2: %{x}<br>Correlation: %{z}<extra></extra>"
-        )
+    fig_corr, ax_corr = plt.subplots(figsize=(5, 4))
+    sns.heatmap(
+        corr_df,
+        annot=True,
+        cmap="RdBu",
+        center=0,
+        square=True,
+        linewidths=0.5,
+        ax=ax_corr
     )
-    fig_corr.update_layout(
-        xaxis_side="bottom",
-        margin=dict(t=40, b=50, l=50, r=50),
-        title="Correlation Heatmap"
-    )
-    st.plotly_chart(fig_corr, use_container_width=True)
+    ax_corr.set_title("Correlation Heatmap")
+    st.pyplot(fig_corr)
 
     st.markdown("---")
 
-    # 1.7 Optional: Regional Map of Sales (if lat/lon available) – skippable if not present
+    # 1.7 Optional: Geographic Scatter (if lat/lon available)
     if "Latitude" in filtered_df.columns and "Longitude" in filtered_df.columns:
         st.subheader("Geographic Distribution of Sales")
         map_df = filtered_df[["Latitude", "Longitude", "Sales"]].copy()
-        map_df["size"] = (map_df["Sales"] - map_df["Sales"].min()) / (
-            map_df["Sales"].max() - map_df["Sales"].min()
-        ) * 15 + 5  # scale bubble size
-        fig_map = px.scatter_mapbox(
-            map_df,
-            lat="Latitude",
-            lon="Longitude",
-            size="size",
-            color="Sales",
-            color_continuous_scale="Viridis",
-            hover_data=["Sales"],
-            zoom=3,
-            height=500
+        # Normalize bubble sizes
+        min_sales = map_df["Sales"].min()
+        max_sales = map_df["Sales"].max()
+        map_df["size"] = ((map_df["Sales"] - min_sales) / (max_sales - min_sales)) * 200 + 20
+
+        fig_map, ax_map = plt.subplots(figsize=(8, 5))
+        sc = ax_map.scatter(
+            map_df["Longitude"],
+            map_df["Latitude"],
+            s=map_df["size"],
+            c=map_df["Sales"],
+            cmap="viridis",
+            alpha=0.6
         )
-        fig_map.update_layout(
-            mapbox_style="open-street-map",
-            margin=dict(t=40, b=30, l=30, r=30),
-            title="Sales by Location"
-        )
-        st.plotly_chart(fig_map, use_container_width=True)
+        ax_map.set_xlabel("Longitude")
+        ax_map.set_ylabel("Latitude")
+        ax_map.set_title("Sales by Location (Bubble Size ∝ Sales)")
+        cbar = plt.colorbar(sc, ax=ax_map)
+        cbar.ax.set_ylabel("Sales (USD)")
+        st.pyplot(fig_map)
 
 # ---------------------------------------
 # 3.2 TAB 2: MODEL WITHOUT FEATURE ENGINEERING
@@ -371,22 +351,19 @@ with tabs[1]:
                 verbose=0
             )
 
-            # Show training curves
+            # Show training curves with Matplotlib
             train_mae = history0.history["mae"]
             val_mae = history0.history["val_mae"]
             epochs_range = list(range(1, len(train_mae) + 1))
-            fig_train = go.Figure()
-            fig_train.add_trace(go.Scatter(
-                x=epochs_range, y=train_mae, mode="lines+markers", name="Train MAE"
-            ))
-            fig_train.add_trace(go.Scatter(
-                x=epochs_range, y=val_mae, mode="lines+markers", name="Val MAE"
-            ))
-            fig_train.update_layout(
-                xaxis_title="Epoch", yaxis_title="MAE", title="MAE vs. Epochs (Baseline)",
-                margin=dict(t=40, b=30, l=40, r=40)
-            )
-            st.plotly_chart(fig_train, use_container_width=True)
+            fig_train, ax_train = plt.subplots(figsize=(8, 4))
+            ax_train.plot(epochs_range, train_mae, marker="o", label="Train MAE")
+            ax_train.plot(epochs_range, val_mae, marker="o", label="Val MAE")
+            ax_train.set_xlabel("Epoch")
+            ax_train.set_ylabel("MAE")
+            ax_train.set_title("MAE vs. Epochs (Baseline)")
+            ax_train.legend()
+            ax_train.grid(alpha=0.3)
+            st.pyplot(fig_train)
 
             # Evaluate on test set
             test_loss0, test_mae0 = model0.evaluate(X_test0, y_test0, verbose=0)
@@ -596,23 +573,19 @@ with tabs[2]:
                 verbose=0
             )
 
-            # Plot training curves
+            # Plot training curves (Matplotlib)
             train_mae1 = history1.history["mae"]
             val_mae1 = history1.history["val_mae"]
             epochs1 = list(range(1, len(train_mae1) + 1))
-
-            fig_train1 = go.Figure()
-            fig_train1.add_trace(go.Scatter(
-                x=epochs1, y=train_mae1, mode="lines+markers", name="Train MAE"
-            ))
-            fig_train1.add_trace(go.Scatter(
-                x=epochs1, y=val_mae1, mode="lines+markers", name="Val MAE"
-            ))
-            fig_train1.update_layout(
-                xaxis_title="Epoch", yaxis_title="MAE", title="MAE vs. Epochs (FE Model)",
-                margin=dict(t=40, b=30, l=40, r=40)
-            )
-            st.plotly_chart(fig_train1, use_container_width=True)
+            fig_train1, ax_train1 = plt.subplots(figsize=(8, 4))
+            ax_train1.plot(epochs1, train_mae1, marker="o", label="Train MAE")
+            ax_train1.plot(epochs1, val_mae1, marker="o", label="Val MAE")
+            ax_train1.set_xlabel("Epoch")
+            ax_train1.set_ylabel("MAE")
+            ax_train1.set_title("MAE vs. Epochs (FE Model)")
+            ax_train1.legend()
+            ax_train1.grid(alpha=0.3)
+            st.pyplot(fig_train1)
 
             # Evaluate on test set
             test_loss1, test_mae1 = best_model.evaluate(X1_test, y1_test, verbose=0)
