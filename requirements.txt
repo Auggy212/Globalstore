@@ -1,8 +1,8 @@
 streamlit
 pandas
 numpy
-plotly
-plotly.express
+matplotlib
+seaborn
 tensorflow
 keras-tuner
 scikit-learn
