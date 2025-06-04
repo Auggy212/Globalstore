@@ -1,105 +1,98 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import io
 
-# Page configuration
-st.set_page_config(page_title="Global Superstore EDA", layout="wide")
+st.set_page_config(page_title="Global Superstore Deep Dive", layout="wide")
 
-# Title
-st.title("Global Superstore: Exploratory Data Analysis & Deep-Learning Prep")
+st.title("📊 Global Superstore Deep Learning Exploration")
 
-# 1. Load data
+# File upload
+uploaded_file = st.file_uploader("Upload the Global Superstore Excel file", type=["xlsx"])
+
 @st.cache_data
-def load_data(path):
-    return pd.read_excel(path, sheet_name='Orders')
+def load_data(file):
+    xls = pd.ExcelFile(file)
+    df = xls.parse("Orders")
+    df['Order Date'] = pd.to_datetime(df['Order Date'])
+    df['Ship Date'] = pd.to_datetime(df['Ship Date'])
+    return df
 
-file_path = 'Global Superstore.xlsx'  # Ensure this file is in the same directory
-orders = load_data(file_path)
+if uploaded_file:
+    df = load_data(uploaded_file)
 
-# Show raw data head
-if st.sidebar.checkbox("Show Raw Data", False):
-    st.subheader("Raw Orders Data")
-    st.dataframe(orders.head())
+    st.subheader("Data Preview")
+    st.dataframe(df.head())
 
-# Sidebar selection for visuals
-vis_options = [
-    "Numeric Feature Distributions",
-    "Correlation Heatmap",
-    "Profit by Region",
-    "Order Count by Category",
-    "PCA of Numeric Features"
-]
-choice = st.sidebar.radio("Select Visualization", vis_options)
+    # Sidebar filters
+    region = st.sidebar.multiselect("Select Region(s)", options=df["Region"].unique(), default=list(df["Region"].unique()))
+    category = st.sidebar.multiselect("Select Category(ies)", options=df["Category"].unique(), default=list(df["Category"].unique()))
 
-# Numeric columns
-numeric_cols = ['Sales', 'Quantity', 'Discount', 'Profit', 'Shipping Cost']
-numeric_data = orders[numeric_cols].dropna()
+    df_filtered = df[(df["Region"].isin(region)) & (df["Category"].isin(category))]
 
-# 2. Numeric Feature Distributions
-if choice == "Numeric Feature Distributions":
-    st.subheader("Distribution of Numeric Features")
-    fig, axes = plt.subplots(2, 3, figsize=(12, 8))
-    axes = axes.flatten()
-    for i, col in enumerate(numeric_cols):
-        axes[i].hist(numeric_data[col], bins=30, edgecolor='black')
-        axes[i].set_title(f"{col}")
-    # Hide any extra subplot (axes[5] unused)
-    if len(numeric_cols) < len(axes):
-        fig.delaxes(axes[-1])
-    plt.tight_layout()
-    st.pyplot(fig)
+    # Section A: Visualizations Without Feature Engineering
+    st.header("📌 Visualizations (Without Feature Engineering)")
 
-# 3. Correlation Heatmap
-elif choice == "Correlation Heatmap":
-    st.subheader("Correlation Heatmap of Numeric Features")
-    corr_matrix = numeric_data.corr()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap='coolwarm', ax=ax)
-    ax.set_title('Correlation Matrix')
-    st.pyplot(fig)
+    st.subheader("1. Monthly Sales and Profit Trend")
+    monthly = df_filtered.resample('M', on='Order Date')[['Sales', 'Profit']].sum()
+    fig1, ax1 = plt.subplots(figsize=(10, 4))
+    monthly.plot(ax=ax1)
+    ax1.set_title("Monthly Sales and Profit")
+    ax1.set_ylabel("USD")
+    ax1.set_xlabel("Month")
+    st.pyplot(fig1)
 
-# 4. Profit by Region
-elif choice == "Profit by Region":
-    st.subheader("Profit Distribution by Region")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.boxplot(x='Region', y='Profit', data=orders, ax=ax)
-    ax.set_title('Profit by Region')
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
+    st.subheader("2. Sales by Category and Sub-Category")
+    cat_sales = df_filtered.groupby(['Category', 'Sub-Category'])['Sales'].sum().sort_values()
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    cat_sales.plot(kind='barh', ax=ax2, color='skyblue')
+    ax2.set_title("Sales by Category/Sub-Category")
+    ax2.set_xlabel("Sales (USD)")
+    st.pyplot(fig2)
 
-# 5. Order Count by Category
-elif choice == "Order Count by Category":
-    st.subheader("Orders Count by Category")
-    count_series = orders['Category'].value_counts()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    count_series.plot(kind='bar', edgecolor='black', ax=ax)
-    ax.set_ylabel('Count')
-    ax.set_title('Category Counts')
-    st.pyplot(fig)
+    st.subheader("3. Discount vs Profit Scatterplot")
+    fig3, ax3 = plt.subplots(figsize=(8, 4))
+    sns.scatterplot(data=df_filtered, x="Discount", y="Profit", hue="Category", ax=ax3)
+    ax3.set_title("Discount vs Profit")
+    st.pyplot(fig3)
 
-# 6. PCA of Numeric Features
-elif choice == "PCA of Numeric Features":
-    st.subheader("PCA on Numeric Features, Colored by Category")
-    # Standardize
-    scaler = StandardScaler()
-    scaled = scaler.fit_transform(numeric_data)
-    pca = PCA(n_components=2)
-    pca_result = pca.fit_transform(scaled)
-    pca_df = pd.DataFrame(pca_result, columns=['PC1', 'PC2'])
-    pca_df['Category'] = orders['Category'].values
+    st.subheader("4. Order Priority vs Shipping Mode")
+    heatmap_data = pd.crosstab(df_filtered['Order Priority'], df_filtered['Ship Mode'])
+    fig4, ax4 = plt.subplots()
+    sns.heatmap(heatmap_data, annot=True, fmt='d', cmap="Blues", ax=ax4)
+    ax4.set_title("Order Priority vs Shipping Mode")
+    st.pyplot(fig4)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.scatterplot(x='PC1', y='PC2', hue='Category', data=pca_df, alpha=0.6, ax=ax)
-    ax.set_title('PCA of Numeric Features')
-    st.pyplot(fig)
-    
-    # Show explained variance
-    explained = pca.explained_variance_ratio_
-    st.markdown(f"**Explained Variance Ratio:** PC1: {explained[0]:.2f}, PC2: {explained[1]:.2f}")
+    st.divider()
 
-# Footer or instructions
-st.sidebar.markdown("---")
-st.sidebar.info("Use this Streamlit app to explore the Global Superstore dataset. Select a visualization from the sidebar.")
+    # Section B: Feature Engineering
+    st.header("🧠 Visualizations (With Feature Engineering)")
+
+    df_filtered['Shipping Duration'] = (df_filtered['Ship Date'] - df_filtered['Order Date']).dt.days
+    df_filtered['Profit Margin'] = df_filtered['Profit'] / df_filtered['Sales']
+    df_filtered = df_filtered.replace([float("inf"), float("-inf")], None).dropna()
+
+    st.subheader("5. Average Shipping Duration by Region")
+    ship_time = df_filtered.groupby("Region")["Shipping Duration"].mean().sort_values()
+    fig5, ax5 = plt.subplots()
+    ship_time.plot(kind='barh', color='orange', ax=ax5)
+    ax5.set_title("Avg Shipping Duration by Region")
+    ax5.set_xlabel("Days")
+    st.pyplot(fig5)
+
+    st.subheader("6. Profit Margin Distribution")
+    fig6, ax6 = plt.subplots()
+    sns.histplot(df_filtered["Profit Margin"], kde=True, bins=30, ax=ax6)
+    ax6.set_title("Distribution of Profit Margin")
+    st.pyplot(fig6)
+
+    st.subheader("7. Sales vs Profit Margin")
+    fig7, ax7 = plt.subplots()
+    sns.scatterplot(data=df_filtered, x="Sales", y="Profit Margin", hue="Region", ax=ax7)
+    ax7.set_title("Sales vs Profit Margin")
+    st.pyplot(fig7)
+
+    st.success("✅ Analysis Complete. Use sidebar to filter data and explore different insights.")
+else:
+    st.info("Please upload the Global Superstore dataset to begin.")
