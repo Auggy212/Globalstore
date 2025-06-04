@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
@@ -41,44 +40,34 @@ numeric_data = orders[numeric_cols].dropna()
 # 2. Numeric Feature Distributions
 if choice == "Numeric Feature Distributions":
     st.subheader("Distribution of Numeric Features")
-    fig, axes = plt.subplots(2, 3, figsize=(12, 8))
-    axes = axes.flatten()
-    for i, col in enumerate(numeric_cols):
-        axes[i].hist(numeric_data[col], bins=30, edgecolor='black')
-        axes[i].set_title(f"{col}")
-    # Hide any extra subplot (axes[5] unused)
-    if len(numeric_cols) < len(axes):
-        fig.delaxes(axes[-1])
-    plt.tight_layout()
-    st.pyplot(fig)
+    for col in numeric_cols:
+        fig = px.histogram(numeric_data, x=col, nbins=30, title=f"Distribution of {col}")
+        st.plotly_chart(fig, use_container_width=True)
 
 # 3. Correlation Heatmap
 elif choice == "Correlation Heatmap":
     st.subheader("Correlation Heatmap of Numeric Features")
     corr_matrix = numeric_data.corr()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap='coolwarm', ax=ax)
-    ax.set_title('Correlation Matrix')
-    st.pyplot(fig)
+    fig = px.imshow(corr_matrix,
+                    text_auto=True,
+                    aspect="auto",
+                    color_continuous_scale='RdBu_r',
+                    title='Correlation Matrix')
+    st.plotly_chart(fig, use_container_width=True)
 
 # 4. Profit by Region
 elif choice == "Profit by Region":
     st.subheader("Profit Distribution by Region")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.boxplot(x='Region', y='Profit', data=orders, ax=ax)
-    ax.set_title('Profit by Region')
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
+    fig = px.box(orders, x='Region', y='Profit', title='Profit by Region')
+    st.plotly_chart(fig, use_container_width=True)
 
 # 5. Order Count by Category
 elif choice == "Order Count by Category":
     st.subheader("Orders Count by Category")
-    count_series = orders['Category'].value_counts()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    count_series.plot(kind='bar', edgecolor='black', ax=ax)
-    ax.set_ylabel('Count')
-    ax.set_title('Category Counts')
-    st.pyplot(fig)
+    count_df = orders['Category'].value_counts().reset_index()
+    count_df.columns = ['Category', 'Count']
+    fig = px.bar(count_df, x='Category', y='Count', title='Category Counts')
+    st.plotly_chart(fig, use_container_width=True)
 
 # 6. PCA of Numeric Features
 elif choice == "PCA of Numeric Features":
@@ -91,11 +80,9 @@ elif choice == "PCA of Numeric Features":
     pca_df = pd.DataFrame(pca_result, columns=['PC1', 'PC2'])
     pca_df['Category'] = orders['Category'].values
 
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.scatterplot(x='PC1', y='PC2', hue='Category', data=pca_df, alpha=0.6, ax=ax)
-    ax.set_title('PCA of Numeric Features')
-    st.pyplot(fig)
-    
+    fig = px.scatter(pca_df, x='PC1', y='PC2', color='Category', title='PCA of Numeric Features')
+    st.plotly_chart(fig, use_container_width=True)
+
     # Show explained variance
     explained = pca.explained_variance_ratio_
     st.markdown(f"**Explained Variance Ratio:** PC1: {explained[0]:.2f}, PC2: {explained[1]:.2f}")
